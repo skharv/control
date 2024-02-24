@@ -1,6 +1,12 @@
 use bevy::{prelude::*, sprite::{MaterialMesh2dBundle, Mesh2dHandle}};
 use rand::Rng;
-use crate::component::*;
+use crate::{component, component::*};
+
+#[derive(Eq, PartialEq)]
+pub enum UnitState{
+    Idle,
+    Move,
+}
 
 pub fn spawn(
     mut commands: Commands,
@@ -22,7 +28,7 @@ pub fn spawn(
         Velocity { x: 0., y: 0. },
         TargetPosition { x: spawn_point.x, y: spawn_point.y },
         MovementSpeed { value: 10. },
-        Idle,
+        component::State { state: UnitState::Idle },
         ));
         info!("Spawned unit with radius: {}", unit_radius);
     }
@@ -89,8 +95,7 @@ pub fn select(
 }
 
 pub fn set_target_position(
-    mut commands: Commands,
-    mut query: Query<(Entity, &mut TargetPosition), (With<Unit>, With<Selected>)>,
+    mut query: Query<(&mut TargetPosition, &mut component::State), (With<Unit>, With<Selected>)>,
     mouse_button_input: Res<ButtonInput<MouseButton>>,
     windows: Query<&Window>,
     cameras: Query<(&Camera, &GlobalTransform)>,
@@ -99,9 +104,9 @@ pub fn set_target_position(
         let (camera, camera_transform) = cameras.single();
         let window = windows.single();
         if let Some(mouse_position) = window.cursor_position() {
-            for (entity, mut target_position) in query.iter_mut() {
+            for (mut target_position, mut state) in query.iter_mut() {
                 if let Some(position) = camera.viewport_to_world_2d(camera_transform, mouse_position) {
-                    commands.entity(entity).insert(Move);
+                    state.state = UnitState::Move;
                     target_position.x = position.x;
                     target_position.y = position.y;
                 }
@@ -111,28 +116,22 @@ pub fn set_target_position(
 }
 
 pub fn move_towards_target(
-    mut commands: Commands,
-    mut query: Query<(Entity, &Transform, &mut TargetPosition, &Radius, &mut Velocity, &MovementSpeed), (With<Unit>, With<Move>)>,
+    mut query: Query<(&Transform, &TargetPosition, &Radius, &mut Velocity, &MovementSpeed, &mut component::State), With<Unit>>,
     ) {
-    for (entity, transform, mut target_position, radius, mut velocity, movement_speed) in query.iter_mut() {
+    for (transform, target_position, radius, mut velocity, movement_speed, mut state) in query.iter_mut() {
         let direction = Vec2::new(target_position.x, target_position.y) - transform.translation.truncate();
-        if direction.length() > radius.value {
-            let direction = direction.normalize();
-            velocity.x += direction.x * movement_speed.value;
-            velocity.y += direction.y * movement_speed.value;
+        if state.state == UnitState::Move {
+            if direction.length() > radius.value {
+                let direction = direction.normalize();
+                velocity.x += direction.x * movement_speed.value;
+                velocity.y += direction.y * movement_speed.value;
+            } else {
+                state.state = UnitState::Idle;
+            }
         } else {
-            commands.entity(entity).remove::<Move>();
-            target_position.x = transform.translation.x;
-            target_position.y = transform.translation.y;
+            if direction.length() > radius.value {
+                state.state = UnitState::Move;
+            }
         }
-    }
-}
-
-pub fn set_idle(
-    mut commands: Commands,
-    query: Query<Entity, (With<Unit>, Without<Move>, Without<Idle>)>,
-    ) {
-    for entity in query.iter() {
-        commands.entity(entity).insert(Idle);
     }
 }

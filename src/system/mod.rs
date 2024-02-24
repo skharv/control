@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 mod camera;
-mod unit;
+pub mod unit;
 
 pub struct GamePlugin;
 

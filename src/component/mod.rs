@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use crate::system::unit::UnitState;
 
 #[derive(Component)]
 pub struct Radius{
@@ -29,7 +30,6 @@ pub struct MovementSpeed{
 }
 
 #[derive(Component)]
-pub struct Move;
-
-#[derive(Component)]
-pub struct Idle;
+pub struct State {
+    pub state: UnitState,
+}
