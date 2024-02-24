@@ -1,4 +1,4 @@
-use bevy::{prelude::*, sprite::{MaterialMesh2dBundle, Mesh2dHandle}};
+use bevy::{input::keyboard::KeyboardInput, prelude::*, sprite::{MaterialMesh2dBundle, Mesh2dHandle}};
 use rand::Rng;
 use crate::{component, component::*};
 
@@ -6,6 +6,7 @@ use crate::{component, component::*};
 pub enum UnitState{
     Idle,
     Move,
+    Hold,
 }
 
 pub fn spawn(
@@ -35,7 +36,7 @@ pub fn spawn(
 }
 
 pub fn collision(
-    mut query: Query<(&mut Transform, &Radius, &mut Velocity), With<Unit>>,
+    mut query: Query<(&mut Transform, &Radius, &mut Velocity, &component::State), With<Unit>>,
     ) {
     let mut combinations = query.iter_combinations_mut();
         while let Some([mut unit1, mut unit2]) = combinations.fetch_next() {
@@ -46,10 +47,20 @@ pub fn collision(
             warn!("collision detected at {}", center_location);
             let normal = (unit2.0.translation - unit1.0.translation).normalize();
             let separation = combined_radius - distance;
-            unit1.2.x -= normal.x * separation;
-            unit1.2.y -= normal.y * separation;
-            unit2.2.x += normal.x * separation;
-            unit2.2.y += normal.y * separation;
+            let mut unit1_difference = unit1.1.value / (unit1.1.value + unit2.1.value);
+            let mut unit2_difference = unit2.1.value / (unit1.1.value + unit2.1.value);
+            if unit1.3.state == UnitState::Hold {
+                unit1_difference = 0.;
+                unit2_difference = 1.;
+            }
+            if unit2.3.state == UnitState::Hold {
+                unit2_difference = 0.;
+                unit1_difference = 1.;
+            }
+            unit1.2.x -= normal.x * separation * unit1_difference;
+            unit1.2.y -= normal.y * separation * unit1_difference;
+            unit2.2.x += normal.x * separation * unit2_difference;
+            unit2.2.y += normal.y * separation * unit2_difference;
         }
     }
 }
@@ -132,6 +143,21 @@ pub fn move_towards_target(
             if direction.length() > radius.value {
                 state.state = UnitState::Move;
             }
+        }
+    }
+}
+
+pub fn hold_position(
+    mut query: Query<(&mut TargetPosition, &Transform, &mut component::State, &mut Velocity), (With<Unit>, With<Selected>)>,
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    ) {
+    for (mut target_position, transform, mut state, mut velocity) in query.iter_mut() {
+        if keyboard_input.just_pressed(KeyCode::KeyD) {
+            state.state = UnitState::Hold;
+            target_position.x = transform.translation.x;
+            target_position.y = transform.translation.y;
+            velocity.x = 0.;
+            velocity.y = 0.;
         }
     }
 }
