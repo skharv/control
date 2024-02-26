@@ -1,5 +1,10 @@
 use bevy::prelude::*;
-use crate::system::unit::UnitState;
+use crate::game::unit::UnitState;
+
+#[derive(Component)]
+pub struct Player {
+    handle: usize,
+}
 
 #[derive(Component)]
 pub struct Radius{

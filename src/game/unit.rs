@@ -1,6 +1,12 @@
-use bevy::{input::keyboard::KeyboardInput, prelude::*, sprite::{MaterialMesh2dBundle, Mesh2dHandle}};
+use bevy::{prelude::*, sprite::{MaterialMesh2dBundle, Mesh2dHandle}};
+use bevy_ggrs::prelude::*;
 use rand::Rng;
-use crate::{component, component::*};
+use crate::game::{component, component::*};
+use crate::rollback::GameConfig;
+
+const BLUE: Color = Color::rgb(0.0, 0.0, 1.0);
+const RED: Color = Color::rgb(1.0, 0.0, 0.0);
+const PLAYER_COLORS: [Color; 2] = [BLUE, RED];
 
 #[derive(Eq, PartialEq)]
 pub enum UnitState{
@@ -13,25 +19,35 @@ pub fn spawn(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
+    session: Res<Session<GameConfig>>,
     ) {
-    let mut rng = rand::thread_rng();
-    for _ in 0..10 {
-        let unit_radius = rng.gen_range(5.0..10.0);
-        let spawn_point = Vec2::new(rng.gen_range(-10.0..10.0), rng.gen_range(-10.0..10.0));
-        commands.spawn((MaterialMesh2dBundle {
-            mesh: Mesh2dHandle(meshes.add(Circle { radius: unit_radius })),
-            material: materials.add(Color::ALICE_BLUE),
-            transform: Transform::from_xyz(spawn_point.x, spawn_point.y, 0.0),
-            ..default()
-        },
-        Unit,
-        Radius { value: unit_radius },
-        Velocity { x: 0., y: 0. },
-        TargetPosition { x: spawn_point.x, y: spawn_point.y },
-        MovementSpeed { value: 10. },
-        component::State { state: UnitState::Idle },
-        ));
-        info!("Spawned unit with radius: {}", unit_radius);
+    let num_players = match&*session {
+        Session::SyncTest(s) => s.num_players(),
+        Session::P2P(s) => s.num_players(),
+        Session::Spectator(s) => s.num_players(),
+    };
+
+    for handle in 0..num_players {
+        info!("Spawning units for player {}", handle);
+        let mut rng = rand::thread_rng();
+        for _ in 0..10 {
+            let unit_radius = rng.gen_range(5.0..10.0);
+            let spawn_point = Vec2::new(rng.gen_range(-10.0..10.0), rng.gen_range(-10.0..10.0));
+            commands.spawn((MaterialMesh2dBundle {
+                mesh: Mesh2dHandle(meshes.add(Circle { radius: unit_radius })),
+                material: materials.add(PLAYER_COLORS[handle]),
+                transform: Transform::from_xyz(spawn_point.x, spawn_point.y, 0.0),
+                ..default()
+            },
+            Unit,
+            Radius { value: unit_radius },
+            Velocity { x: 0., y: 0. },
+            TargetPosition { x: spawn_point.x, y: spawn_point.y },
+            MovementSpeed { value: 10. },
+            component::State { state: UnitState::Idle },
+            ))
+            .add_rollback();
+        }
     }
 }
 
@@ -43,8 +59,6 @@ pub fn collision(
         let distance = unit1.0.translation.distance(unit2.0.translation);
         let combined_radius = unit1.1.value + unit2.1.value;
         if distance < combined_radius {
-            let center_location = (unit1.0.translation + unit2.0.translation) / 2.;
-            warn!("collision detected at {}", center_location);
             let normal = (unit2.0.translation - unit1.0.translation).normalize();
             let separation = combined_radius - distance;
             let mut unit1_difference = unit1.1.value / (unit1.1.value + unit2.1.value);
@@ -97,7 +111,6 @@ pub fn select(
                     let distance = position.distance(mouse_position);
                     if distance < radius.value {
                         commands.entity(entity).insert(Selected);
-                        info!("Selected unit with radius: {}", radius.value);
                     }
                 }
             }

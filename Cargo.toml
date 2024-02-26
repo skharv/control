@@ -7,5 +7,9 @@ edition = "2021"
 opt-level = 2
 
 [dependencies]
-bevy = "0.13.0"
+bevy = { version = "0.13.0", features = ["dynamic_linking"] }
+bevy_ggrs = "0.14.0"
+bytemuck = "1.14.3"
+clap = { version = "4.5.1", features = ["derive"] }
+ggrs = "0.10.0"
 rand = "0.8.5"
